@@ -72,3 +72,10 @@ func (c *TrafficCounter) Tx(uuid string, n int) {
 	cts := c.GetCounter(uuid)
 	cts.UpCounter.Add(int64(n))
 }
+
+// AddBoth records rx (downlink) and tx (uplink) with a single lookup.
+func (c *TrafficCounter) AddBoth(uuid string, rx, tx int64) {
+	cts := c.GetCounter(uuid)
+	cts.DownCounter.Add(rx)
+	cts.UpCounter.Add(tx)
+}

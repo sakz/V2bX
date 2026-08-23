@@ -35,6 +35,23 @@ import (
 
 var errSniffingTimeout = errors.New("timeout on sniffing")
 
+// excludeRegexpCache caches compiled regexp patterns from
+// SniffingRequest.ExcludeForDomain so they are compiled once instead of
+// on every sniffed connection.
+var excludeRegexpCache sync.Map // map[string]*regexp.Regexp
+
+func compileExcludeRegexp(pattern string) (*regexp.Regexp, error) {
+	if v, ok := excludeRegexpCache.Load(pattern); ok {
+		return v.(*regexp.Regexp), nil
+	}
+	re, err := regexp.Compile(pattern)
+	if err != nil {
+		return nil, err
+	}
+	excludeRegexpCache.Store(pattern, re)
+	return re, nil
+}
+
 type cachedReader struct {
 	sync.Mutex
 	reader buf.TimeoutReader
@@ -245,8 +262,7 @@ func (d *DefaultDispatcher) shouldOverride(ctx context.Context, result SniffResu
 	}
 	for _, d := range request.ExcludeForDomain {
 		if strings.HasPrefix(d, "regexp:") {
-			pattern := d[7:]
-			re, err := regexp.Compile(pattern)
+			re, err := compileExcludeRegexp(d[7:])
 			if err != nil {
 				errors.LogInfo(ctx, "Unable to compile regex")
 				continue
@@ -255,7 +271,7 @@ func (d *DefaultDispatcher) shouldOverride(ctx context.Context, result SniffResu
 				return false
 			}
 		} else {
-			if strings.ToLower(domain) == d {
+			if strings.EqualFold(domain, d) {
 				return false
 			}
 		}

@@ -34,9 +34,13 @@ func (t *Task) Start(first bool) error {
 			}
 		}
 
+		// Reuse a single timer instead of allocating a new one per
+		// iteration (time.After) to avoid timer churn on every tick.
+		timer := time.NewTimer(t.Interval)
+		defer timer.Stop()
 		for {
 			select {
-			case <-time.After(t.Interval):
+			case <-timer.C:
 			case <-t.stop:
 				return
 			}
@@ -48,6 +52,7 @@ func (t *Task) Start(first bool) error {
 				t.access.Unlock()
 				return
 			}
+			timer.Reset(t.Interval)
 		}
 	}()
 

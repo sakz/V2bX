@@ -1,6 +1,9 @@
 package cmd
 
 import (
+	_ "expvar"
+	"net/http"
+	_ "net/http/pprof"
 	"os"
 	"os/signal"
 	"runtime"
@@ -62,6 +65,14 @@ func serverHandle(_ *cobra.Command, _ []string) {
 		log.SetOutput(f)
 	}
 	limiter.Init()
+	// Optional profiling endpoint for load testing / field diagnostics.
+	if addr := os.Getenv("V2BX_PPROF_ADDR"); addr != "" {
+		runtime.SetMutexProfileFraction(5)
+		runtime.SetBlockProfileRate(100)
+		go func() {
+			log.Println("pprof server:", http.ListenAndServe(addr, nil))
+		}()
+	}
 	log.Info("Start V2bX...")
 	vc, err := vCore.NewCore(c.CoresConfig)
 	if err != nil {

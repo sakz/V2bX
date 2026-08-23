@@ -16,3 +16,4 @@ output/*
 .idea/*
 newV2bX.sh
 quic_singbox.sh
+e2e/harness/harness
