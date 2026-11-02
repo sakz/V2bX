@@ -16,6 +16,10 @@ type Hysteria2node struct {
 	Logger        *zap.Logger
 	EventLogger   server.EventLogger
 	TrafficLogger server.TrafficLogger
+	// Auth is node-scoped: the authenticator and its uuid->uid map only
+	// contain the users of this node, so DelUsers on one node cannot affect
+	// other nodes sharing the same uuids.
+	Auth *V2bX
 }
 
 func (h *Hysteria2) AddNode(tag string, info *panel.NodeInfo, config *conf.Options) error {
@@ -32,6 +36,7 @@ func (h *Hysteria2) AddNode(tag string, info *panel.NodeInfo, config *conf.Optio
 			h.Logger.Fatal("failed to parse server config", zap.Error(err))
 		}
 	}
+	auth := &V2bX{usersMap: make(map[string]int)}
 	n := Hysteria2node{
 		Tag:    tag,
 		Logger: h.Logger,
@@ -44,13 +49,14 @@ func (h *Hysteria2) AddNode(tag string, info *panel.NodeInfo, config *conf.Optio
 			logger:                h.Logger,
 			ReportMinTrafficBytes: config.ReportMinTraffic * 1024,
 		},
+		Auth: auth,
 	}
 
 	hyconfig, err = n.getHyConfig(info, config, &c)
 	if err != nil {
 		return err
 	}
-	hyconfig.Authenticator = h.Auth
+	hyconfig.Authenticator = auth
 	s, err := server.NewServer(hyconfig)
 	if err != nil {
 		return err

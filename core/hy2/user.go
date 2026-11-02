@@ -1,6 +1,7 @@
 package hy2
 
 import (
+	"errors"
 	"net"
 	"sync"
 
@@ -27,37 +28,46 @@ func (v *V2bX) Authenticate(addr net.Addr, auth string, tx uint64) (ok bool, id 
 }
 
 func (h *Hysteria2) AddUsers(p *vCore.AddUsersParams) (added int, err error) {
-	h.Auth.mutex.Lock()
-	for i := range p.Users {
-		h.Auth.usersMap[p.Users[i].Uuid] = p.Users[i].Id
+	n, ok := h.Hy2nodes[p.Tag]
+	if !ok {
+		return 0, errors.New("the node not found")
 	}
-	h.Auth.mutex.Unlock()
+	n.Auth.mutex.Lock()
+	for i := range p.Users {
+		n.Auth.usersMap[p.Users[i].Uuid] = p.Users[i].Id
+	}
+	n.Auth.mutex.Unlock()
 	return len(p.Users), nil
 }
 
 func (h *Hysteria2) DelUsers(users []panel.UserInfo, tag string, _ *panel.NodeInfo) error {
-	if v, ok := h.Hy2nodes[tag].TrafficLogger.(*HookServer).Counter.Load(tag); ok {
+	n, ok := h.Hy2nodes[tag]
+	if !ok {
+		return errors.New("the node not found")
+	}
+	if v, ok := n.TrafficLogger.(*HookServer).Counter.Load(tag); ok {
 		c := v.(*counter.TrafficCounter)
 		for i := range users {
 			c.Delete(users[i].Uuid)
 		}
 	}
-	h.Auth.mutex.Lock()
+	n.Auth.mutex.Lock()
 	for i := range users {
-		delete(h.Auth.usersMap, users[i].Uuid)
+		delete(n.Auth.usersMap, users[i].Uuid)
 	}
-	h.Auth.mutex.Unlock()
+	n.Auth.mutex.Unlock()
 	return nil
 }
 
 func (h *Hysteria2) GetUserTrafficSlice(tag string, reset bool) ([]panel.UserTraffic, error) {
 	trafficSlice := make([]panel.UserTraffic, 0)
-	h.Auth.mutex.RLock()
-	defer h.Auth.mutex.RUnlock()
-	if _, ok := h.Hy2nodes[tag]; !ok {
+	n, ok := h.Hy2nodes[tag]
+	if !ok {
 		return nil, nil
 	}
-	hook := h.Hy2nodes[tag].TrafficLogger.(*HookServer)
+	hook := n.TrafficLogger.(*HookServer)
+	n.Auth.mutex.RLock()
+	defer n.Auth.mutex.RUnlock()
 	if v, ok := hook.Counter.Load(tag); ok {
 		c := v.(*counter.TrafficCounter)
 		c.Counters.Range(func(key, value interface{}) bool {
@@ -70,12 +80,12 @@ func (h *Hysteria2) GetUserTrafficSlice(tag string, reset bool) ([]panel.UserTra
 					traffic.UpCounter.Store(0)
 					traffic.DownCounter.Store(0)
 				}
-				if h.Auth.usersMap[uuid] == 0 {
+				if n.Auth.usersMap[uuid] == 0 {
 					c.Delete(uuid)
 					return true
 				}
 				trafficSlice = append(trafficSlice, panel.UserTraffic{
-					UID:      h.Auth.usersMap[uuid],
+					UID:      n.Auth.usersMap[uuid],
 					Upload:   up,
 					Download: down,
 				})

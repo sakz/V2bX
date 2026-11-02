@@ -34,8 +34,11 @@ type Sing struct {
 	nodeReportMinTrafficBytes map[string]int64
 }
 
+// UserMap holds the panel uid of every user per inbound tag. Keys are scoped
+// by tag so that nodes sharing a uuid (same panel user on several nodes) keep
+// independent mappings and DelUsers on one node cannot affect the others.
 type UserMap struct {
-	uidMap  map[string]int
+	uidMap  map[string]map[string]int
 	mapLock sync.RWMutex
 }
 
@@ -90,7 +93,7 @@ func New(c *conf.CoreConfig) (vCore.Core, error) {
 		router:     b.Router(),
 		logFactory: b.LogFactory(),
 		users: &UserMap{
-			uidMap: make(map[string]int),
+			uidMap: make(map[string]map[string]int),
 		},
 		nodeReportMinTrafficBytes: make(map[string]int64),
 	}, nil
