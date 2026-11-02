@@ -2,6 +2,11 @@ name: Build and Release
 
 on:
   workflow_dispatch:
+    inputs:
+      release_tag:
+        description: 'Existing release tag to upload built binaries to (e.g. v0.4.1). Leave empty to only build artifacts.'
+        required: false
+        type: string
   push:
     branches:
       - master
@@ -121,7 +126,11 @@ jobs:
       - name: Get other version
         if: ${{ github.event_name != 'release' }}
         run: |
-          echo "version=${{ github.sha }}" >> $GITHUB_ENV
+          if [ -n "${{ inputs.release_tag }}" ]; then
+            echo "version=${{ inputs.release_tag }}" >> $GITHUB_ENV
+          else
+            echo "version=${{ github.sha }}" >> $GITHUB_ENV
+          fi
       - name: Build V2bX
         run: |
           echo "version: $version"
@@ -175,9 +184,9 @@ jobs:
             ./V2bX-${{ steps.get_filename.outputs.ASSET_NAME }}/*
       - name: Upload binaries to release
         uses: svenstaro/upload-release-action@v2
-        if: github.event_name == 'release'
+        if: github.event_name == 'release' || inputs.release_tag != ''
         with:
           repo_token: ${{ secrets.GITHUB_TOKEN }}
           file: ./V2bX-${{ steps.get_filename.outputs.ASSET_NAME }}.zip*
-          tag: ${{ github.ref }}
+          tag: ${{ github.event_name == 'release' && github.ref || inputs.release_tag }}
           file_glob: true
